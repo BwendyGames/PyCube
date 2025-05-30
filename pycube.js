@@ -1,6 +1,6 @@
 window.storyFormat({
   "name": "PyCube",
-  "version": "0.2.1",
+  "version": "0.2.3",
   "description": "A Twine story format for Python-like syntax.",
   "author": "Brendon Sutherland",
   "image": "https://pycube.org/icon.svg",
@@ -90,18 +90,25 @@ window.storyFormat({
       background: #191c22;
       border-right: 1.5px solid #333;
       box-shadow: 2px 0 16px #0007;
-      padding: 24px 18px 24px 12px;
+      padding: 24px 14px 24px 14px; /* more balanced padding */
       z-index: 50;
       display: none;
       flex-direction: column;
       font-size: 1em;
+      gap: 0.5em;
     }
     #sidebar.open { display: flex; }
     #sidebar h3 { margin-top: 0; margin-bottom: 16px; font-size: 1.15em; }
     #sidebar .nav-buttons {
+      position: absolute;
+      top: 8px;
+      left: 10px;
       display: flex;
       gap: 6px;
-      margin-bottom: 16px;
+      margin-bottom: 0;
+      margin-top: 0;
+      justify-content: flex-start;
+      z-index: 101;
     }
     #sidebar .nav-buttons button {
       padding: 0.33em 0.7em;
@@ -127,17 +134,52 @@ window.storyFormat({
       border-radius: 4px;
       border: none;
       margin-bottom: 14px;
+      margin-top: 8px;
       cursor: pointer;
       transition: background 0.18s;
       font-size: 1em;
+      width: 100%;
+      box-sizing: border-box;
     }
     #sidebar .restart-btn:hover { background: #db5a5a; }
+    #sidebar-story-title {
+      font-weight: bold;
+      font-size: 1.22em;
+      margin-bottom: 2px;
+      letter-spacing: 0.5px;
+      color: #fff;
+      text-shadow: 0 1px 4px #0006;
+      padding-bottom: 0;
+      line-height: 1.2;
+      text-align: left;
+      margin-top: 6px; /* add margin to separate from nav-buttons */
+    }
+    #sidebar-author-passage {
+      font-size: 1em;
+      color: #b1c1d0;
+      margin-bottom: 8px;
+      margin-top: 0;
+      padding: 0 0 4px 0;
+      border-bottom: 1px solid #23293a;
+      text-align: left;
+    }
+    #sidebar-passage {
+      background: #20222a;
+      border-radius: 7px;
+      margin: 10px 0 14px 0;
+      padding: 12px 10px 12px 12px;
+      color: #e2e2e2;
+      font-size: 1em;
+      box-shadow: 0 1px 4px #0002;
+      text-align: left;
+    }
     #save-section {
       margin-bottom: 18px;
       background: #20222a;
       padding: 12px 10px;
       border-radius: 8px;
       box-shadow: 0 1px 4px #0004;
+      margin-top: 0;
     }
     #save-section summary {
       font-weight: bold;
@@ -145,11 +187,13 @@ window.storyFormat({
       font-size: 1em;
       cursor: pointer;
       outline: none;
+      margin-bottom: 2px;
     }
     #save-section .slot-label {
       font-weight: bold;
       color: #b1c1d0;
       margin-right: 0.5em;
+      font-size: 1em;
     }
     #save-section .slot-status {
       font-size: 0.93em;
@@ -185,15 +229,73 @@ window.storyFormat({
       width: 100px;
       display: block;
     }
+    /* Divider below author/title */
+    #sidebar .sidebar-divider {
+      border-bottom: 1.5px solid #23293a;
+      margin: 8px 0 10px 0;
+      width: 100%;
+      height: 0;
+    }
+    /* Built-in button styling for passage-inserted buttons */
+    .pycube-btn, .passage button, .sidebar-passage button, #sidebar button:not(.restart-btn):not(#sidebar-close):not(#back-btn):not(#forward-btn) {
+      background: #23293a;
+      color: #e2e2e2;
+      border: none;
+      border-radius: 5px;
+      padding: 0.32em 1.1em;
+      font-family: monospace;
+      font-size: 1em;
+      margin: 0.18em 0.12em 0.18em 0;
+      cursor: pointer;
+      transition: background 0.18s, color 0.18s;
+      box-shadow: 0 1px 4px #0002;
+      outline: none;
+      display: inline-block;
+    }
+    .pycube-btn:hover, .passage button:hover, .sidebar-passage button:hover, #sidebar button:not(.restart-btn):not(#sidebar-close):not(#back-btn):not(#forward-btn):hover {
+      background: #33445a;
+      color: #fff;
+    }
+    .pycube-btn:active, .passage button:active, .sidebar-passage button:active, #sidebar button:not(.restart-btn):not(#sidebar-close):not(#back-btn):not(#forward-btn):active {
+      background: #1a1f2a;
+    }
+    .pycube-btn:disabled, .passage button:disabled, .sidebar-passage button:disabled, #sidebar button:not(.restart-btn):not(#sidebar-close):not(#back-btn):not(#forward-btn):disabled {
+      background: #191c22;
+      color: #666;
+      cursor: not-allowed;
+    }
     #sidebar-close {
       position: absolute;
-      right: 6px; top: 7px;
-      background: transparent;
-      color: #888;
-      font-size: 1.3em;
+      top: 8px;
+      right: 10px;
+      background: #23293a;
+      color: #e2e2e2;
       border: none;
+      border-radius: 5px;
+      padding: 0.18em 0.7em 0.18em 0.7em;
+      font-size: 1.25em;
+      font-family: monospace;
       cursor: pointer;
-      padding: 0;
+      transition: background 0.18s, color 0.18s;
+      z-index: 102;
+      box-shadow: 0 1px 4px #0002;
+    }
+    #sidebar-close:hover {
+      background: #33445a;
+      color: #fff;
+    }
+    /* Only add top margin to the first content element to avoid overlap with nav/close */
+    #sidebar > #sidebar-story-title {
+      margin-top: 48px;
+    }
+    /* Remove the previous rule that added margin to all elements */
+    /* Restore default or smaller margins for other elements if needed */
+    #sidebar > #sidebar-author-passage,
+    #sidebar > #sidebar-passage,
+    #sidebar > .sidebar-divider,
+    #sidebar > .restart-btn,
+    #sidebar > #save-section {
+      margin-top: 0;
     }
   </style>
 </head>
@@ -202,11 +304,14 @@ window.storyFormat({
   <button id="sidebar-toggle" title="Open menu">&#9776;</button>
   <div id="sidebar">
     <button id="sidebar-close" title="Close">&times;</button>
-    <h3>PyCube Menu</h3>
     <div class="nav-buttons">
       <button id="back-btn" title="Back">&#8592;</button>
       <button id="forward-btn" title="Forward">&#8594;</button>
     </div>
+    <div id="sidebar-story-title"></div>
+    <div id="sidebar-author-passage"></div>
+    <div id="sidebar-passage"></div>
+    <div class="sidebar-divider"></div>
     <button class="restart-btn" onclick="restartGame()">Restart</button>
     <details id="save-section">
       <summary>Save/Load Slots</summary>
@@ -233,7 +338,7 @@ window.storyFormat({
     };
 
     const sidebar = document.getElementById('sidebar');
-    document.getElementById('sidebar-toggle').onclick = () => { sidebar.classList.add('open'); refreshSaveSlots(); updateNavButtons(); };
+    document.getElementById('sidebar-toggle').onclick = () => { sidebar.classList.add('open'); refreshSaveSlots(); updateNavButtons(); showSidebarPassage(); showAuthorPassage(); };
     document.getElementById('sidebar-close').onclick = () => sidebar.classList.remove('open');
 
     const vars = {};
@@ -300,18 +405,17 @@ window.storyFormat({
     }
     function isObject(val) {
       return val && typeof val === "object" && !isArray(val);
-    }    
-    function formatVar(val, isObjectValue = false) {
+    }      function formatVar(val, isObjectValue = false) {
       if (val === undefined || val === null) {
         return String(val);
       }
       if (isArray(val)) {
-        return '[' + val.map(v => formatVar(v, false)).join(', ') + ']';
+        return val.map(v => formatVar(v, false)).join(', ');
       } else if (isObject(val)) {
         if (isObjectValue) {
           return String(val);
         }
-        return '{' + Object.entries(val).map(([k,v]) => k + ': ' + formatVar(v, true)).join(', ') + '}';
+        return Object.entries(val).map(([k,v]) => k + ': ' + formatVar(v, true)).join(', ');
       }
       return String(val);
     }
@@ -388,7 +492,6 @@ window.storyFormat({
           }
         }        output = output.replace(/\{([^{}]+)\}/g, function(match, expr) {
           try {
-            // Try to access nested array/object values like inventory[0] or obj["key"]
             let val;
             let varMatch = expr.match(/^([a-zA-Z_]\w*)\[(.*)\]$/);
             if (varMatch) {
@@ -399,22 +502,17 @@ window.storyFormat({
                 if (isArray(base)) {
                   val = base[key];
                 } else if (isObject(base)) {
-                  // For objects, first try direct key access
-                  val = base[key];
-                  if (val === undefined) {
-                    val = base[String(key)];
-                  }
-                  // If still undefined and key is numeric, get nth key-value pair
-                  if (val === undefined && typeof key === 'number') {
+                  // Handle numeric keys as nth key-value pair for objects
+                  if (typeof key === 'number') {
                     let entries = Object.entries(base);
                     if (key >= 0 && key < entries.length) {
                       let [k, v] = entries[key];
-                      // Special case: return key-value pair for numeric index
                       return k + ": " + formatVar(v, true);
                     }
                   }
+                  // Otherwise, try direct key access
+                  val = base[key] !== undefined ? base[key] : base[String(key)];
                 }
-                // For non-special cases, format the value
                 return formatVar(val);
               }
             } else {
@@ -437,20 +535,13 @@ window.storyFormat({
         showError("Parser error: " + (e && e.message ? e.message : e));
         return "<div style='color:red;'>Error parsing passage.</div>";
       }
-    }
-
-    function showPassage(name, pushHistory=true) {
+    }    function showPassage(name, pushHistory=true) {
       const passages = getAllPassages();
       if (!(name in passages)) {
         document.getElementById('passages').innerHTML =
           '<div class="passage">Passage not found: ' + name + '</div>';
         showError("Passage not found: " + name);
         return;
-      }
-      // Always parse Init before any passage except Init itself
-      const initKey = Object.keys(passages).find(k => k.toLowerCase() === "init");
-      if (initKey && name !== initKey) {
-        parsePassage(passages[initKey]);
       }
       if (pushHistory && currentPassage && name !== currentPassage) {
         backStack.push({passage: currentPassage, vars: JSON.stringify(vars)});
@@ -611,6 +702,68 @@ window.storyFormat({
     window.loadSlot = loadSlot;
     window.exportSlot = exportSlot;
     window.importSlot = importSlot;
+
+    // Insert story title at the very top of the sidebar, only once
+    function ensureSidebarTitle() {
+      const sidebar = document.getElementById('sidebar');
+      let storyTitleDiv = document.getElementById('sidebar-story-title');
+      if (!storyTitleDiv) {
+        storyTitleDiv = document.createElement('div');
+        storyTitleDiv.id = 'sidebar-story-title';
+        sidebar.insertBefore(storyTitleDiv, sidebar.firstChild.nextSibling);
+      }
+      storyTitleDiv.textContent = window.story && window.story.name ? window.story.name : document.title;
+    }
+
+    function showAuthorPassage() {
+      const passages = getAllPassages();
+      const authorKey = Object.keys(passages).find(k => k.toLowerCase() === "author");
+      let authorDiv = document.getElementById('sidebar-author-passage');
+      if (!authorDiv) {
+        authorDiv = document.createElement('div');
+        authorDiv.id = 'sidebar-author-passage';
+        const sidebar = document.getElementById('sidebar');
+        const storyTitleDiv = document.getElementById('sidebar-story-title');
+        sidebar.insertBefore(authorDiv, storyTitleDiv.nextSibling);
+      }
+      if (authorKey) {
+        const authorContent = parsePassage(passages[authorKey]);
+        authorDiv.innerHTML = authorContent;
+      } else {
+        authorDiv.innerHTML = '';
+      }
+    }
+
+    function showSidebarPassage() {
+      const passages = getAllPassages();
+      const sidebarKey = Object.keys(passages).find(k => k.toLowerCase() === "sidebar");
+      let sidebarPassageDiv = document.getElementById('sidebar-passage');
+      if (!sidebarPassageDiv) {
+        sidebarPassageDiv = document.createElement('div');
+        sidebarPassageDiv.id = 'sidebar-passage';
+        const sidebar = document.getElementById('sidebar');
+        const authorDiv = document.getElementById('sidebar-author-passage');
+        sidebar.insertBefore(sidebarPassageDiv, authorDiv.nextSibling);
+      }
+      if (sidebarKey) {
+        const sidebarContent = parsePassage(passages[sidebarKey]);
+        sidebarPassageDiv.innerHTML = sidebarContent;
+      } else {
+        sidebarPassageDiv.innerHTML = '';
+      }
+    }
+
+    // Patch sidebar-toggle to also show author passage and ensure title
+    const origSidebarToggle = document.getElementById('sidebar-toggle').onclick;
+    document.getElementById('sidebar-toggle').onclick = () => {
+      const sidebar = document.getElementById('sidebar');
+      sidebar.classList.add('open');
+      ensureSidebarTitle();
+      showAuthorPassage();
+      showSidebarPassage();
+      refreshSaveSlots();
+      updateNavButtons();
+    };
 
     setupImportInputs();
 
