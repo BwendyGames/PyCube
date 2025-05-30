@@ -8,7 +8,7 @@ Big thankyou and shoutout to [Sugarcube](https://www.motoslave.net/sugarcube/) f
 
 [Documentation](https://docs.pycube.org/)
 
-See it in action, with an [example](https://example.pycube.org/), and it's [source code](https://github.com/BwendyGames/pycube-example)
+See it in action, with an [example](https://example.pycube.org/), and it's [source code](https://github.com/BwendyGames/pycube-example).
 
 ---
 
