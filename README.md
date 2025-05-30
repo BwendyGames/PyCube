@@ -57,6 +57,6 @@ Add the story format to your formats in the Twine editor:
 
 ![Screenshot 2025-05-29 192827](https://github.com/user-attachments/assets/b30e37bd-0efd-4f26-b740-23c746adba65)
 
-PyCube URL is: `https://pycube.org/format.js`
+The PyCube URL is: `https://pycube.org/format.js`
 
 ![image](https://github.com/user-attachments/assets/d9f6114c-e27a-47c5-8be1-d281af69b9a0)
