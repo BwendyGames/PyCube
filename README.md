@@ -1,6 +1,6 @@
 # PyCube
 
-![logo]("https://pycube.org/logo.png")
+![logo](https://pycube.org/logo.png)
 
 A work-in-progress story-format in Twine, combining elements of Sugarcube with Python-like syntax.
 
