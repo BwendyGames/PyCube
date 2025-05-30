@@ -39,7 +39,7 @@ Inventory: {inventory}
 In the `Next` passage:
 
 ```
-$gold = gold + 1
+$gold += 1
 You got more gold!
 
 if gold > 5:
