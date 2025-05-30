@@ -1,6 +1,6 @@
 window.storyFormat({
   "name": "PyCube",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "A Twine story format for Python-like syntax.",
   "author": "Brendon Sutherland",
   "image": "https://pycube.org/icon.svg",
@@ -266,7 +266,7 @@ window.storyFormat({
     }
 
     function getStartPassage() {
-      if (window.story && window.story.startPassage) return window.story.startPassage;
+      if (window.story && window.story.startPassage) return window.story.startPassages;
       const storydata = document.querySelector('tw-storydata');
       if (storydata) {
         const startPid = storydata.getAttribute('startnode');
@@ -295,11 +295,32 @@ window.storyFormat({
       }
     }
 
+    function isArray(val) {
+      return Array.isArray(val);
+    }
+    function isObject(val) {
+      return val && typeof val === "object" && !isArray(val);
+    }    
+    function formatVar(val, isObjectValue = false) {
+      if (val === undefined || val === null) {
+        return String(val);
+      }
+      if (isArray(val)) {
+        return '[' + val.map(v => formatVar(v, false)).join(', ') + ']';
+      } else if (isObject(val)) {
+        if (isObjectValue) {
+          return String(val);
+        }
+        return '{' + Object.entries(val).map(([k,v]) => k + ': ' + formatVar(v, true)).join(', ') + '}';
+      }
+      return String(val);
+    }
+
     function parsePassage(text) {
       try {
         text = text.replace(/^[ \\t]*#.*$/gm, '');
 
-        // Compound assignments
+        // Compound assignments (arrays/dicts/expressions)
         text = text.replace(/^\\s*\\$([a-zA-Z_]\\w*)\\s*([+\\/*-])=\\s*(.+)$/gm, function(match, name, op, value) {
           const currentVal = vars[name] || 0;
           const val = safeEval(value);
@@ -314,6 +335,7 @@ window.storyFormat({
           return '';
         });
 
+        // Simple assignments: arrays/dicts/expressions
         text = text.replace(/^\\s*\\$([a-zA-Z_]\\w*)\\s*=\\s*(.+)$/gm, function(match, name, value) {
           const val = safeEval(value);
           vars[name] = val !== undefined ? val : value;
@@ -364,10 +386,44 @@ window.storyFormat({
             output += line + '\\n';
             i++;
           }
-        }
-
-        output = output.replace(/\\{([a-zA-Z_]\\w*)\\}/g, function(match, name) {
-          return vars[name] !== undefined ? vars[name] : match;
+        }        output = output.replace(/\{([^{}]+)\}/g, function(match, expr) {
+          try {
+            // Try to access nested array/object values like inventory[0] or obj["key"]
+            let val;
+            let varMatch = expr.match(/^([a-zA-Z_]\w*)\[(.*)\]$/);
+            if (varMatch) {
+              let base = vars[varMatch[1]];
+              let keyExpr = varMatch[2].trim();
+              let key = safeEval(keyExpr);
+              if (base !== undefined) {
+                if (isArray(base)) {
+                  val = base[key];
+                } else if (isObject(base)) {
+                  // For objects, first try direct key access
+                  val = base[key];
+                  if (val === undefined) {
+                    val = base[String(key)];
+                  }
+                  // If still undefined and key is numeric, get nth key-value pair
+                  if (val === undefined && typeof key === 'number') {
+                    let entries = Object.entries(base);
+                    if (key >= 0 && key < entries.length) {
+                      let [k, v] = entries[key];
+                      // Special case: return key-value pair for numeric index
+                      return k + ": " + formatVar(v, true);
+                    }
+                  }
+                }
+                // For non-special cases, format the value
+                return formatVar(val);
+              }
+            } else {
+              val = safeEval(expr);
+            }
+            return formatVar(val);
+          } catch (e) {
+            return match;
+          }
         });
 
         output = output.replace(/\\[\\[([^\\]|]+)(\\|([^\\]]+))?\\]\\]/g, function(match, text, _, target) {
@@ -390,6 +446,11 @@ window.storyFormat({
           '<div class="passage">Passage not found: ' + name + '</div>';
         showError("Passage not found: " + name);
         return;
+      }
+      // Always parse Init before any passage except Init itself
+      const initKey = Object.keys(passages).find(k => k.toLowerCase() === "init");
+      if (initKey && name !== initKey) {
+        parsePassage(passages[initKey]);
       }
       if (pushHistory && currentPassage && name !== currentPassage) {
         backStack.push({passage: currentPassage, vars: JSON.stringify(vars)});
@@ -535,7 +596,7 @@ window.storyFormat({
         sdiv.innerHTML =
           '<span class="slot-label">Slot ' + (i+1) + '</span>' +
           '<span class="slot-status">' + stat.status +
-          (stat.time ? "<br><span style=\'font-size:0.88em;color:#9ec;\'>" + stat.time + "</span>" : "") +
+          (stat.time ? "<br><span style=\'font-size:0.88em;color:#9ec;'>" + stat.time + "</span>" : "") +
           '</span>' +
           '<div class="save-actions">' +
             '<button onclick="saveSlot(' + i + ')">Save</button> ' +
