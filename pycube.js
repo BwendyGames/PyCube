@@ -405,17 +405,17 @@ window.storyFormat({
     }
     function isObject(val) {
       return val && typeof val === "object" && !isArray(val);
-    }      function formatVar(val, isObjectValue = false) {
+    }    function formatVar(val, isObjectValue = false) {
       if (val === undefined || val === null) {
         return String(val);
       }
       if (isArray(val)) {
         return val.map(v => formatVar(v, false)).join(', ');
       } else if (isObject(val)) {
-        if (isObjectValue) {
-          return String(val);
-        }
-        return Object.entries(val).map(([k,v]) => k + ': ' + formatVar(v, true)).join(', ');
+        // For nested objects, format each value
+        return Object.entries(val).map(([k,v]) => 
+          k + ': ' + (isObject(v) ? formatVar(v, false) : String(v))
+        ).join(', ');
       }
       return String(val);
     }
@@ -425,21 +425,96 @@ window.storyFormat({
         text = text.replace(/^[ \\t]*#.*$/gm, '');
 
         // Compound assignments (arrays/dicts/expressions)
-        text = text.replace(/^\\s*\\$([a-zA-Z_]\\w*)\\s*([+\\/*-])=\\s*(.+)$/gm, function(match, name, op, value) {
-          const currentVal = vars[name] || 0;
-          const val = safeEval(value);
-          if (val !== undefined) {
-            switch (op) {
-              case '+': vars[name] = currentVal + val; break;
-              case '-': vars[name] = currentVal - val; break;
-              case '*': vars[name] = currentVal * val; break;
-              case '/': vars[name] = currentVal / val; break;
+        text = text.replace(/^\\s*\\$([a-zA-Z_][\\w\\[\\]'"\\.]*?)\\s*([+\\/*-])=\\s*(.+)$/gm, function(match, path, op, value) {
+          try {
+            // Parse the path to get base variable and any nested accesses
+            const pathParts = path.match(/^([a-zA-Z_]\\w*)(.*)$/);
+            if (!pathParts) return match;
+            
+            const baseVar = pathParts[1];
+            const accessors = pathParts[2];
+            
+            // If no accessors, handle as a simple variable
+            if (!accessors) {
+              const currentVal = vars[baseVar] || 0;
+              const val = safeEval(value);
+              if (val !== undefined) {
+                switch (op) {
+                  case '+': vars[baseVar] = currentVal + val; break;
+                  case '-': vars[baseVar] = currentVal - val; break;
+                  case '*': vars[baseVar] = currentVal * val; break;
+                  case '/': vars[baseVar] = currentVal / val; break;
+                }
+              }
+              return '';
             }
+            
+            // Handle nested access
+            const accessorMatches = [...accessors.matchAll(/\\[(.*?)\\]/g)];
+            if (!accessorMatches.length) return match;
+            
+            let target = vars[baseVar];
+            const keys = accessorMatches.map(m => safeEval(m[1]));
+            
+            // Navigate to the second-to-last key
+            for (let i = 0; i < keys.length - 1; i++) {
+              if (!target || typeof target !== 'object') return match;
+              target = target[keys[i]];
+            }
+            
+            // Get the final key
+            const finalKey = keys[keys.length - 1];
+            if (!target || typeof target !== 'object') return match;
+            
+            // Perform the compound operation
+            const currentVal = target[finalKey] || 0;
+            const val = safeEval(value);
+            if (val !== undefined) {
+              switch (op) {
+                case '+': target[finalKey] = currentVal + val; break;
+                case '-': target[finalKey] = currentVal - val; break;
+                case '*': target[finalKey] = currentVal * val; break;
+                case '/': target[finalKey] = currentVal / val; break;
+              }
+            }
+            return '';
+          } catch (e) {
+            showError("Error in compound assignment: " + e.message);
+            return match;
           }
-          return '';
         });
-
         // Simple assignments: arrays/dicts/expressions
+        // First collect multi-line assignments
+        const assignmentRegex = /^\\s*\\$([a-zA-Z_]\\w*)\\s*=\\s*(\\[|{)/gm;
+        let match;
+        while ((match = assignmentRegex.exec(text)) !== null) {
+          const name = match[1];
+          const startChar = match[2];
+          const endChar = startChar === '[' ? ']' : '}';
+          const startPos = match.index;
+          let bracketCount = 1;
+          let endPos = startPos + match[0].length;
+          
+          // Search for the matching closing bracket
+          while (bracketCount > 0 && endPos < text.length) {
+            if (text[endPos] === startChar) bracketCount++;
+            if (text[endPos] === endChar) bracketCount--;
+            endPos++;
+          }
+          
+          if (bracketCount === 0) {
+            const value = text.substring(startPos + match[0].length - 1, endPos);
+            const val = safeEval(value);
+            if (val !== undefined) {
+              vars[name] = val;
+            }
+            // Clear the processed assignment
+            text = text.substring(0, startPos) + '\\n' + text.substring(endPos);
+            assignmentRegex.lastIndex = startPos;
+          }
+        }
+
+        // Handle remaining single-line assignments
         text = text.replace(/^\\s*\\$([a-zA-Z_]\\w*)\\s*=\\s*(.+)$/gm, function(match, name, value) {
           const val = safeEval(value);
           vars[name] = val !== undefined ? val : value;
