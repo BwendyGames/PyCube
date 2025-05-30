@@ -4,6 +4,8 @@
 
 A work-in-progress story-format in Twine, combining elements of Sugarcube with Python-like syntax.
 
+Big thankyou and shoutout to [Sugarcube](https://www.motoslave.net/sugarcube/) for making game-making accesible to so many.
+
 [Documentation](https://docs.pycube.org/)
 
 ---
