@@ -1,6 +1,6 @@
 window.storyFormat({
   "name": "PyCube",
-  "version": "0.2.3",
+  "version": "0.2.5",
   "description": "A Twine story format for Python-like syntax.",
   "author": "Brendon Sutherland",
   "image": "https://pycube.org/icon.svg",
@@ -22,6 +22,51 @@ window.storyFormat({
       font-size: 1.1rem;
       margin: 0;
       padding: 0;
+    }
+    .waiting {
+      color: #666;
+      font-style: italic;
+    }
+    .wait-block {
+      display: inline-block;
+    }
+    .replace-trigger {
+      color: #8ecafc;
+      text-decoration: none;
+      cursor: pointer;
+      font-weight: normal;
+      border-bottom: 1px dashed #8ecafc;
+      padding: 0 2px;
+    }
+    .replace-trigger:hover {
+      color: #fff;
+      border-bottom-color: #fff;
+    }
+    .choice-container {
+      display: inline-block;
+      margin: 0.5em 0;
+    }
+    .choice-text {
+      margin-bottom: 0.5em;
+      font-style: italic;
+    }
+    .choice-option {
+      color: #8ecafc;
+      text-decoration: none;
+      cursor: pointer;
+      font-weight: normal;
+      border-bottom: 1px dashed #8ecafc;
+      padding: 0 2px;
+      margin-right: 1em;
+    }
+    .choice-option:hover {
+      color: #fff;
+      border-bottom-color: #fff;
+    }
+    .choice-option.selected {
+      color: #fff;
+      border-bottom-color: #fff;
+      font-weight: bold;
     }
     #error-banner {
       display: none;
@@ -342,6 +387,7 @@ window.storyFormat({
     document.getElementById('sidebar-close').onclick = () => sidebar.classList.remove('open');
 
     const vars = {};
+    const tempVars = {};  // Add temporary variables storage
     let currentPassage = null;
     const SLOT_COUNT = 5;
     const SLOT_PREFIX = "pycube_slot_";
@@ -389,11 +435,22 @@ window.storyFormat({
       return null;
     }
 
+    function rand(min, max) {
+      min = Math.ceil(min);
+      max = Math.floor(max);
+      const result = Math.floor(Math.random() * (max - min + 1)) + min;
+      console.log('rand called with', min, max, 'returned', result);
+      return result;
+    }
+
     function safeEval(expr) {
       try {
-        const allowed = Object.assign({}, vars);
+        const allowed = Object.assign({}, vars, tempVars, { rand });
+        console.log('safeEval called with', expr);
         const fn = new Function(...Object.keys(allowed), "return " + expr + ";");
-        return fn(...Object.values(allowed));
+        const result = fn(...Object.values(allowed));
+        console.log('safeEval result:', result);
+        return result;
       } catch (e) {
         showError("Error evaluating expression: " + expr);
         return undefined;
@@ -405,7 +462,14 @@ window.storyFormat({
     }
     function isObject(val) {
       return val && typeof val === "object" && !isArray(val);
-    }    function formatVar(val, isObjectValue = false) {
+    }
+
+    // Add wait function for delayed content
+    function wait(seconds) {
+      return new Promise(resolve => setTimeout(resolve, seconds * 1000));
+    }
+
+    function formatVar(val, isObjectValue = false) {
       if (val === undefined || val === null) {
         return String(val);
       }
@@ -420,9 +484,48 @@ window.storyFormat({
       return String(val);
     }
 
+    function showPassage(name, pushHistory=true) {
+      const passages = getAllPassages();
+      if (!(name in passages)) {
+        document.getElementById('passages').innerHTML =
+          '<div class="passage">Passage not found: ' + name + '</div>';
+        showError("Passage not found: " + name);
+        return;
+      }
+      if (pushHistory && currentPassage && name !== currentPassage) {
+        backStack.push({passage: currentPassage, vars: JSON.stringify(vars)});
+        forwardStack = [];
+      }
+      currentPassage = name;
+      document.getElementById('passages').innerHTML =
+        '<div class="passage">' + parsePassage(passages[name]) + '</div>';
+      // Clear temporary variables after passage is displayed
+      Object.keys(tempVars).forEach(k => delete tempVars[k]);
+      updateNavButtons();
+    }
+
     function parsePassage(text) {
       try {
         text = text.replace(/^[ \\t]*#.*$/gm, '');
+
+        // Handle temporary variable assignments
+        text = text.replace(/^\\s*_([a-zA-Z_]\\w*)\\s*=\\s*(.+)$/gm, function(match, name, value) {
+          try {
+            showError("Debug: Processing " + name + " = " + value); // Temporary debug message
+            const val = safeEval(value);
+            showError("Debug: Result = " + val); // Temporary debug message
+            tempVars[name] = val;
+            return '';
+          } catch (e) {
+            showError("Error in temporary variable assignment: " + e.message);
+            return match;
+          }
+        });
+
+        // Handle wait blocks
+        text = text.replace(/wait\\((\d+)\\):\\s*$/gm, function(match, seconds) {
+          return '<div class="wait-block" data-seconds="' + seconds + '">';
+        });
 
         // Compound assignments (arrays/dicts/expressions)
         text = text.replace(/^\\s*\\$([a-zA-Z_][\\w\\[\\]'"\\.]*?)\\s*([+\\/*-])=\\s*(.+)$/gm, function(match, path, op, value) {
@@ -483,6 +586,7 @@ window.storyFormat({
             return match;
           }
         });
+
         // Simple assignments: arrays/dicts/expressions
         // First collect multi-line assignments
         const assignmentRegex = /^\\s*\\$([a-zA-Z_]\\w*)\\s*=\\s*(\\[|{)/gm;
@@ -528,6 +632,7 @@ window.storyFormat({
           let line = lines[i];
           let ifMatch = line.match(/^if ([^:]+):\\s*$/);
           let elseMatch = line.match(/^else:\\s*$/);
+          let replaceMatch = line.match(/^replace\\(['"]([^'"]+)['"]\\):\\s*$/);
 
           if (ifMatch) {
             let condition = ifMatch[1]
@@ -557,6 +662,120 @@ window.storyFormat({
               output += elseBlock.join('\\n') + '\\n';
             }
             continue;
+          } else if (replaceMatch) {
+            const clickText = replaceMatch[1];
+            let blockLines = [];
+            i++;
+            
+            // Skip any empty lines before indented content
+            while (i < lines.length && !/^\\s+/.test(lines[i]) && lines[i].trim() === '') {
+              i++;
+            }
+            
+            // Get indentation level from first indented line
+            let indentLevel = 0;
+            if (i < lines.length && /^\\s+/.test(lines[i])) {
+              indentLevel = lines[i].match(/^\\s*/)[0].length;
+            }
+            
+            // Collect all indented lines without processing them
+            while (i < lines.length) {
+              const currentLine = lines[i];
+              if (!/^\\s+/.test(currentLine)) {
+                if (currentLine.trim() === '') {
+                  blockLines.push('');
+                  i++;
+                  continue;
+                }
+                break;
+              }
+              const currentIndent = currentLine.match(/^\\s*/)[0].length;
+              if (currentIndent < indentLevel) break;
+              // Store the raw line without any processing
+              blockLines.push(currentLine.substring(indentLevel));
+              i++;
+            }
+            
+            const replaceId = 'replace_' + Math.random().toString(36).substr(2, 9);
+            // Store the raw content without any processing
+            const rawContent = blockLines.join('\\n');
+            output += '<span class="replace-trigger" data-replace-id="' + replaceId + 
+                     '" data-content="' + rawContent.replace(/"/g, '&quot;') + '">' + 
+                     clickText.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</span>\\n';
+            continue;
+          } else if (line.match(/^choice\\(['"]([^'"]+)['"]\\):\\s*$/)) {
+            const choiceMatch = line.match(/^choice\\(['"]([^'"]+)['"]\\):\\s*$/);
+            const choiceText = choiceMatch[1];
+            let options = [];
+            i++;
+            
+            // Skip any empty lines before indented content
+            while (i < lines.length && !/^\\s+/.test(lines[i]) && lines[i].trim() === '') {
+              i++;
+            }
+            
+            // Get indentation level from first indented line
+            let indentLevel = 0;
+            if (i < lines.length && /^\\s+/.test(lines[i])) {
+              indentLevel = lines[i].match(/^\\s*/)[0].length;
+            }
+            
+            // Collect all options
+            let currentOption = null;
+            while (i < lines.length) {
+              const currentLine = lines[i];
+              if (!/^\\s+/.test(currentLine)) {
+                if (currentLine.trim() === '') {
+                  if (currentOption) {
+                    currentOption.content.push('');
+                  }
+                  i++;
+                  continue;
+                }
+                break;
+              }
+              
+              const currentIndent = currentLine.match(/^\\s*/)[0].length;
+              if (currentIndent < indentLevel) break;
+              
+              const lineContent = currentLine.substring(indentLevel);
+              const optionMatch = lineContent.match(/^option\\(['"]([^'"]+)['"]\\):\\s*$/);
+              
+              if (optionMatch) {
+                if (currentOption) {
+                  options.push(currentOption);
+                }
+                currentOption = {
+                  text: optionMatch[1],
+                  content: []
+                };
+              } else if (currentOption) {
+                currentOption.content.push(lineContent);
+              }
+              i++;
+            }
+            
+            if (currentOption) {
+              options.push(currentOption);
+            }
+            
+            // Create the choice container
+            const choiceId = 'choice_' + Math.random().toString(36).substr(2, 9);
+            let choiceHtml = '<div class="choice-container" data-choice-id="' + choiceId + '">';
+            choiceHtml += '<div class="choice-text">' + choiceText.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div>';
+            
+            // Add each option
+            options.forEach((option, index) => {
+              const optionId = choiceId + '_option_' + index;
+              const rawContent = option.content.join('\\n');
+              choiceHtml += '<span class="choice-option" data-option-id="' + optionId + 
+                           '" data-content="' + rawContent.replace(/"/g, '&quot;') + '">' + 
+                           option.text.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</span>';
+            });
+            
+            choiceHtml += '</div>';
+            output += choiceHtml + '\\n';
+            continue;
           } else if (elseMatch) {
             i++;
             while (i < lines.length && /^\\s+/.test(lines[i])) i++;
@@ -565,7 +784,9 @@ window.storyFormat({
             output += line + '\\n';
             i++;
           }
-        }        output = output.replace(/\{([^{}]+)\}/g, function(match, expr) {
+        }
+
+        output = output.replace(/\{([^{}]+)\}/g, function(match, expr) {
           try {
             let val;
             let varMatch = expr.match(/^([a-zA-Z_]\w*)\[(.*)\]$/);
@@ -577,7 +798,6 @@ window.storyFormat({
                 if (isArray(base)) {
                   val = base[key];
                 } else if (isObject(base)) {
-                  // Handle numeric keys as nth key-value pair for objects
                   if (typeof key === 'number') {
                     let entries = Object.entries(base);
                     if (key >= 0 && key < entries.length) {
@@ -585,7 +805,6 @@ window.storyFormat({
                       return k + ": " + formatVar(v, true);
                     }
                   }
-                  // Otherwise, try direct key access
                   val = base[key] !== undefined ? base[key] : base[String(key)];
                 }
                 return formatVar(val);
@@ -599,33 +818,125 @@ window.storyFormat({
           }
         });
 
-        output = output.replace(/\\[\\[([^\\]|]+)(\\|([^\\]]+))?\\]\\]/g, function(match, text, _, target) {
-          target = target || text;
-          return '<a onclick="go(\\'' + target.replace(/'/g, "\\'") + '\\')">' + text + '</a>';
+        // First pass: Handle Twine passage links [[link]] and [[link|text]]
+        let processedLinks = new Set();
+        output = output.replace(/\\[\\[([^\\]]+)\\]\\]/g, function(match, content) {
+          processedLinks.add(match);
+          // Check if it contains a pipe character
+          if (content.includes('|')) {
+            let [display, target] = content.split('|').map(s => s.trim());
+            return '<a onclick="go(\\'' + target + '\\')">' + display + '</a>';
+          } else {
+            // No pipe character, use the whole content as both target and display
+            let target = content.trim();
+            return '<a onclick="go(\\'' + target + '\\')">' + target + '</a>';
+          }
+        });
+        
+        // Second pass: Handle temporary variable display with []
+        output = output.replace(/\\[([^\\]]+)\\]/g, function(match, expr) {
+          // Skip if this was a passage link
+          if (processedLinks.has('[' + match + ']')) {
+            return match;
+          }
+          try {
+            showError("Debug: Displaying temp var " + expr); // Temporary debug message
+            let val;
+            let varMatch = expr.match(/^([a-zA-Z_]\\w*)\\[(.*)\\]$/);
+            if (varMatch) {
+              let base = tempVars[varMatch[1]];
+              let keyExpr = varMatch[2].trim();
+              let key = safeEval(keyExpr);
+              if (base !== undefined) {
+                if (isArray(base)) {
+                  val = base[key];
+                } else if (isObject(base)) {
+                  if (typeof key === 'number') {
+                    let entries = Object.entries(base);
+                    if (key >= 0 && key < entries.length) {
+                      let [k, v] = entries[key];
+                      return k + ": " + formatVar(v, true);
+                    }
+                  }
+                  val = base[key] !== undefined ? base[key] : base[String(key)];
+                }
+                return formatVar(val);
+              }
+            } else {
+              val = tempVars[expr];
+              showError("Debug: Found value " + val); // Temporary debug message
+              if (val === undefined) {
+                val = safeEval(expr);
+              }
+            }
+            return formatVar(val);
+          } catch (e) {
+            showError("Error displaying temporary variable: " + e.message);
+            return match;
+          }
         });
 
+        output = output.replace(/\{([^{}]+)\}/g, function(match, expr) {
+          try {
+            let val;
+            let varMatch = expr.match(/^([a-zA-Z_]\w*)\[(.*)\]$/);
+            if (varMatch) {
+              let base = vars[varMatch[1]];
+              let keyExpr = varMatch[2].trim();
+              let key = safeEval(keyExpr);
+              if (base !== undefined) {
+                if (isArray(base)) {
+                  val = base[key];
+                } else if (isObject(base)) {
+                  if (typeof key === 'number') {
+                    let entries = Object.entries(base);
+                    if (key >= 0 && key < entries.length) {
+                      let [k, v] = entries[key];
+                      return k + ": " + formatVar(v, true);
+                    }
+                  }
+                  val = base[key] !== undefined ? base[key] : base[String(key)];
+                }
+                return formatVar(val);
+              }
+            } else {
+              val = safeEval(expr);
+            }
+            return formatVar(val);
+          } catch (e) {
+            return match;
+          }
+        });
+
+        output = output.replace(/\\n/g, "<br>");
+        
+        // Process wait blocks after all other parsing
+        const waitBlocks = output.match(/<div class="wait-block" data-seconds="\\d+">/g);
+        if (waitBlocks) {
+          const div = document.createElement('div');
+          div.innerHTML = output;
+          
+          const processWaitBlocks = async () => {
+            const blocks = div.querySelectorAll('.wait-block');
+            for (const block of blocks) {
+              const seconds = parseInt(block.getAttribute('data-seconds'));
+              const content = block.innerHTML;
+              block.innerHTML = '<span class="waiting">...</span>';
+              await wait(seconds);
+              block.innerHTML = content;
+            }
+          };
+          
+          processWaitBlocks();
+          return div.innerHTML;
+        }
+
         hideError();
-        return output.trim().replace(/\\n/g, "<br>");
+        return output.trim();
       } catch(e) {
         showError("Parser error: " + (e && e.message ? e.message : e));
         return "<div style='color:red;'>Error parsing passage.</div>";
       }
-    }    function showPassage(name, pushHistory=true) {
-      const passages = getAllPassages();
-      if (!(name in passages)) {
-        document.getElementById('passages').innerHTML =
-          '<div class="passage">Passage not found: ' + name + '</div>';
-        showError("Passage not found: " + name);
-        return;
-      }
-      if (pushHistory && currentPassage && name !== currentPassage) {
-        backStack.push({passage: currentPassage, vars: JSON.stringify(vars)});
-        forwardStack = [];
-      }
-      currentPassage = name;
-      document.getElementById('passages').innerHTML =
-        '<div class="passage">' + parsePassage(passages[name]) + '</div>';
-      updateNavButtons();
     }
 
     window.go = showPassage;
@@ -875,6 +1186,39 @@ window.storyFormat({
         showError("No starting passage found.");
       }
       updateNavButtons();
+    });
+
+    // Add click handler for replace triggers
+    document.addEventListener('click', function(e) {
+      if (e.target.classList.contains('replace-trigger')) {
+        const content = e.target.getAttribute('data-content');
+        // Parse the content to handle nested macros
+        const parsedContent = parsePassage(content);
+        e.target.outerHTML = parsedContent;
+      }
+    });
+
+    // Add click handler for choice options
+    document.addEventListener('click', function(e) {
+      if (e.target.classList.contains('choice-option')) {
+        const container = e.target.closest('.choice-container');
+        if (!container) return;
+        
+        // Remove selected class from all options in this container
+        container.querySelectorAll('.choice-option').forEach(opt => {
+          opt.classList.remove('selected');
+        });
+        
+        // Add selected class to clicked option
+        e.target.classList.add('selected');
+        
+        const content = e.target.getAttribute('data-content');
+        // Parse the content to handle nested macros
+        const parsedContent = parsePassage(content);
+        
+        // Replace the choice container with the processed content
+        container.outerHTML = parsedContent;
+      }
     });
 
   </script>
