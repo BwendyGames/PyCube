@@ -8,6 +8,8 @@ Big thankyou and shoutout to [Sugarcube](https://www.motoslave.net/sugarcube/) f
 
 [Documentation](https://docs.pycube.org/)
 
+Download the forked [Twine Editor](https://github.com/BwendyGames/twinepy/releases) for Windows, for increased PyCube support!
+
 See it in action, with an [example](https://example.pycube.org/), and it's [source code](https://github.com/BwendyGames/pycube-example).
 
 ---
