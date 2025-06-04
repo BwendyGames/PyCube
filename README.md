@@ -6,7 +6,7 @@ A work-in-progress story-format in Twine, combining elements of Sugarcube with P
 
 Big thankyou and shoutout to [Sugarcube](https://www.motoslave.net/sugarcube/) for making game-making accesible to so many.
 
-[Documentation](https://docs.pycube.org/)
+Make sure to checkout the [Documentation](https://docs.pycube.org/)!
 
 Download the forked [Twine Editor](https://github.com/BwendyGames/twinepy) for Windows, for increased PyCube support!
 
